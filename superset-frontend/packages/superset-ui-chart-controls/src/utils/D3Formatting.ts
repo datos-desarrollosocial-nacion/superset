@@ -23,13 +23,6 @@ export const D3_FORMAT_DOCS = t(
   'D3 format syntax: https://github.com/d3/d3-format',
 );
 
-export const D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT = t(
-  'Only applies when "Label Type" is set to show values.',
-);
-export const D3_NUMBER_FORMAT_DESCRIPTION_PERCENTAGE_TEXT = t(
-  'Only applies when "Label Type" is not set to a percentage.',
-);
-
 // input choices & options
 export const D3_FORMAT_OPTIONS: [string, string][] = [
   [NumberFormats.SMART_NUMBER, t('Adaptive formatting')],
@@ -48,6 +41,10 @@ export const D3_FORMAT_OPTIONS: [string, string][] = [
   ['$,.2f', '$,.2f (12345.432 => $12,345.43)'],
   ['DURATION', t('Duration in ms (66000 => 1m 6s)')],
   ['DURATION_SUB', t('Duration in ms (1.40008 => 1ms 400µs 80ns)')],
+  ['CURRENCY_AR', '$.d, (12345.432 => $12.345)'],
+  ['CURRENCY_AR_DECIMAL', '$.,2f, (12345.432 => $12.345,42)'],
+  ['NUMBER_AR', '.d, (12345.432 => 12.345)'],
+  ['NUMBER_AR_DECIMAL', '.,2f, (12345.432 => 12.345,42)'],
 ];
 
 export const D3_TIME_FORMAT_DOCS = t(
