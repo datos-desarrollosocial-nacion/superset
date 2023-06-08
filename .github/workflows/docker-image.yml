@@ -2,9 +2,9 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ mds-mis ]
   pull_request:
-    branches: [ main ]
+    branches: [ mds-mis ]
 
 jobs:
   build_push_to_registry:
