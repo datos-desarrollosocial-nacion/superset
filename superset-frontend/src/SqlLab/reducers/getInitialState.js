@@ -19,6 +19,14 @@
 import { t } from '@superset-ui/core';
 import getToastsFromPyFlashMessages from 'src/components/MessageToasts/getToastsFromPyFlashMessages';
 
+export function dedupeTabHistory(tabHistory) {
+  return tabHistory.reduce(
+    (result, tabId) =>
+      result.slice(-1)[0] === tabId ? result : result.concat(tabId),
+    [],
+  );
+}
+
 export default function getInitialState({
   defaultDbId,
   common,
@@ -48,7 +56,6 @@ export default function getInitialState({
     autorun: false,
     templateParams: null,
     dbId: defaultDbId,
-    functionNames: [],
     queryLimit: common.conf.DEFAULT_SQLLAB_LIMIT,
     validationResult: {
       id: null,
@@ -79,7 +86,6 @@ export default function getInitialState({
         autorun: activeTab.autorun,
         templateParams: activeTab.template_params || undefined,
         dbId: activeTab.database_id,
-        functionNames: [],
         schema: activeTab.schema,
         queryLimit: activeTab.query_limit,
         validationResult: {
@@ -105,21 +111,12 @@ export default function getInitialState({
   });
 
   const tabHistory = activeTab ? [activeTab.id.toString()] : [];
-  const tables = [];
+  let tables = {};
   if (activeTab) {
     activeTab.table_schemas
       .filter(tableSchema => tableSchema.description !== null)
       .forEach(tableSchema => {
-        const {
-          columns,
-          selectStar,
-          primaryKey,
-          foreignKeys,
-          indexes,
-          dataPreviewQueryId,
-          partitions,
-          metadata,
-        } = tableSchema.description;
+        const { dataPreviewQueryId, ...persistData } = tableSchema.description;
         const table = {
           dbId: tableSchema.database_id,
           queryEditorId: tableSchema.tab_state_id.toString(),
@@ -127,62 +124,74 @@ export default function getInitialState({
           name: tableSchema.table,
           expanded: tableSchema.expanded,
           id: tableSchema.id,
-          isMetadataLoading: false,
-          isExtraMetadataLoading: false,
           dataPreviewQueryId,
-          columns,
-          selectStar,
-          primaryKey,
-          foreignKeys,
-          indexes,
-          partitions,
-          metadata,
+          persistData,
+          initialized: true,
         };
-        tables.push(table);
+        tables = {
+          ...tables,
+          [table.id]: table,
+        };
       });
   }
 
   const queries = { ...queries_ };
 
-  /**
-   * If the `SQLLAB_BACKEND_PERSISTENCE` feature flag is off, or if the user
-   * hasn't used SQL Lab after it has been turned on, the state will be stored
-   * in the browser's local storage.
-   */
-  if (
-    localStorage.getItem('redux') &&
-    JSON.parse(localStorage.getItem('redux')).sqlLab
-  ) {
-    const { sqlLab } = JSON.parse(localStorage.getItem('redux'));
+  try {
+    /**
+     * If the `SQLLAB_BACKEND_PERSISTENCE` feature flag is off, or if the user
+     * hasn't used SQL Lab after it has been turned on, the state will be stored
+     * in the browser's local storage.
+     */
+    if (
+      localStorage.getItem('redux') &&
+      JSON.parse(localStorage.getItem('redux')).sqlLab
+    ) {
+      const { sqlLab } = JSON.parse(localStorage.getItem('redux'));
 
-    if (sqlLab.queryEditors.length === 0) {
-      // migration was successful
-      localStorage.removeItem('redux');
-    } else {
-      unsavedQueryEditor = sqlLab.unsavedQueryEditor || {};
-      // add query editors and tables to state with a special flag so they can
-      // be migrated if the `SQLLAB_BACKEND_PERSISTENCE` feature flag is on
-      sqlLab.queryEditors.forEach(qe => {
-        queryEditors = {
-          ...queryEditors,
-          [qe.id]: {
-            ...queryEditors[qe.id],
-            ...qe,
-            name: qe.title || qe.name,
-            ...(unsavedQueryEditor.id === qe.id && unsavedQueryEditor),
-            inLocalStorage: true,
-            loaded: true,
-          },
-        };
-      });
-      sqlLab.tables.forEach(table =>
-        tables.push({ ...table, inLocalStorage: true }),
-      );
-      Object.values(sqlLab.queries).forEach(query => {
-        queries[query.id] = { ...query, inLocalStorage: true };
-      });
-      tabHistory.push(...sqlLab.tabHistory);
+      if (sqlLab.queryEditors.length === 0) {
+        // migration was successful
+        localStorage.removeItem('redux');
+      } else {
+        unsavedQueryEditor = sqlLab.unsavedQueryEditor || {};
+        // add query editors and tables to state with a special flag so they can
+        // be migrated if the `SQLLAB_BACKEND_PERSISTENCE` feature flag is on
+        sqlLab.queryEditors.forEach(qe => {
+          queryEditors = {
+            ...queryEditors,
+            [qe.id]: {
+              ...queryEditors[qe.id],
+              ...qe,
+              name: qe.title || qe.name,
+              ...(unsavedQueryEditor.id === qe.id && unsavedQueryEditor),
+              inLocalStorage: true,
+              loaded: true,
+            },
+          };
+        });
+        const expandedTables = new Set();
+        tables = sqlLab.tables.reduce((merged, table) => {
+          const expanded = !expandedTables.has(table.queryEditorId);
+          if (expanded) {
+            expandedTables.add(table.queryEditorId);
+          }
+          return {
+            ...merged,
+            [table.id]: {
+              ...tables[table.id],
+              ...table,
+              expanded,
+            },
+          };
+        }, tables);
+        Object.values(sqlLab.queries).forEach(query => {
+          queries[query.id] = { ...query, inLocalStorage: true };
+        });
+        tabHistory.push(...sqlLab.tabHistory);
+      }
     }
+  } catch (error) {
+    // continue regardless of error
   }
 
   return {
@@ -191,10 +200,23 @@ export default function getInitialState({
       alerts: [],
       databases,
       offline: false,
-      queries,
+      queries: Object.fromEntries(
+        Object.entries(queries).map(([queryId, query]) => [
+          queryId,
+          {
+            ...query,
+            ...(query.startDttm && {
+              startDttm: Number(query.startDttm),
+            }),
+            ...(query.endDttm && {
+              endDttm: Number(query.endDttm),
+            }),
+          },
+        ]),
+      ),
       queryEditors: Object.values(queryEditors),
-      tabHistory,
-      tables,
+      tabHistory: dedupeTabHistory(tabHistory),
+      tables: Object.values(tables),
       queriesLastUpdate: Date.now(),
       user,
       unsavedQueryEditor,

@@ -15,18 +15,18 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+from datetime import datetime
 
 from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
-from dateutil import parser
 
 from superset import app, is_feature_enabled
 from superset.commands.exceptions import CommandException
+from superset.daos.report import ReportScheduleDAO
 from superset.extensions import celery_app
 from superset.reports.commands.exceptions import ReportScheduleUnexpectedError
 from superset.reports.commands.execute import AsyncExecuteReportScheduleCommand
 from superset.reports.commands.log_prune import AsyncPruneReportScheduleLogCommand
-from superset.reports.dao import ReportScheduleDAO
 from superset.tasks.cron_util import cron_schedule_window
 from superset.utils.celery import session_scope
 from superset.utils.core import LoggerLevel
@@ -44,9 +44,15 @@ def scheduler() -> None:
         return
     with session_scope(nullpool=True) as session:
         active_schedules = ReportScheduleDAO.find_active(session)
+        triggered_at = (
+            datetime.fromisoformat(scheduler.request.expires)
+            - app.config["CELERY_BEAT_SCHEDULER_EXPIRES"]
+            if scheduler.request.expires
+            else datetime.utcnow()
+        )
         for active_schedule in active_schedules:
             for schedule in cron_schedule_window(
-                active_schedule.crontab, active_schedule.timezone
+                triggered_at, active_schedule.crontab, active_schedule.timezone
             ):
                 logger.info(
                     "Scheduling alert %s eta: %s", active_schedule.name, schedule
@@ -64,21 +70,15 @@ def scheduler() -> None:
                         active_schedule.working_timeout
                         + app.config["ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG"]
                     )
-                execute.apply_async(
-                    (
-                        active_schedule.id,
-                        schedule,
-                    ),
-                    **async_options,
-                )
+                execute.apply_async((active_schedule.id,), **async_options)
 
 
 @celery_app.task(name="reports.execute", bind=True)
-def execute(self: Celery.task, report_schedule_id: int, scheduled_dttm: str) -> None:
+def execute(self: Celery.task, report_schedule_id: int) -> None:
     task_id = None
     try:
         task_id = execute.request.id
-        scheduled_dttm_ = parser.parse(scheduled_dttm)
+        scheduled_dttm = execute.request.eta
         logger.info(
             "Executing alert/report, task id: %s, scheduled_dttm: %s",
             task_id,
@@ -87,7 +87,7 @@ def execute(self: Celery.task, report_schedule_id: int, scheduled_dttm: str) -> 
         AsyncExecuteReportScheduleCommand(
             task_id,
             report_schedule_id,
-            scheduled_dttm_,
+            scheduled_dttm,
         ).run()
     except ReportScheduleUnexpectedError:
         logger.exception(

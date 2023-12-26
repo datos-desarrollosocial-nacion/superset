@@ -17,7 +17,6 @@
 """Loads datasets, dashboards and slices in a new superset instance"""
 import json
 import os
-from typing import List
 
 import pandas as pd
 from sqlalchemy import DateTime, inspect, String
@@ -52,7 +51,6 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals, too-many-s
     tbl_name = "wb_health_population"
     database = superset.utils.database.get_example_database()
     with database.get_sqla_engine_with_context() as engine:
-
         schema = inspect(engine).default_schema_name
         table_exists = database.has_table_by_name(tbl_name)
 
@@ -140,7 +138,7 @@ def load_world_bank_health_n_pop(  # pylint: disable=too-many-locals, too-many-s
     db.session.commit()
 
 
-def create_slices(tbl: BaseDatasource) -> List[Slice]:
+def create_slices(tbl: BaseDatasource) -> list[Slice]:
     metric = "sum__SP_POP_TOTL"
     metrics = ["sum__SP_POP_TOTL"]
     secondary_metric = {
@@ -171,35 +169,6 @@ def create_slices(tbl: BaseDatasource) -> List[Slice]:
     }
 
     return [
-        Slice(
-            slice_name="Region Filter",
-            viz_type="filter_box",
-            datasource_type=DatasourceType.TABLE,
-            datasource_id=tbl.id,
-            params=get_slice_json(
-                defaults,
-                viz_type="filter_box",
-                date_filter=False,
-                filter_configs=[
-                    {
-                        "asc": False,
-                        "clearable": True,
-                        "column": "region",
-                        "key": "2s98dfu",
-                        "metric": "sum__SP_POP_TOTL",
-                        "multiple": False,
-                    },
-                    {
-                        "asc": False,
-                        "clearable": True,
-                        "key": "li3j2lk",
-                        "column": "country_name",
-                        "metric": "sum__SP_POP_TOTL",
-                        "multiple": True,
-                    },
-                ],
-            ),
-        ),
         Slice(
             slice_name="World's Population",
             viz_type="big_number",
@@ -344,15 +313,15 @@ def create_slices(tbl: BaseDatasource) -> List[Slice]:
         ),
         Slice(
             slice_name="Treemap",
-            viz_type="treemap",
+            viz_type="treemap_v2",
             datasource_type=DatasourceType.TABLE,
             datasource_id=tbl.id,
             params=get_slice_json(
                 defaults,
                 since="1960-01-01",
                 until="now",
-                viz_type="treemap",
-                metrics=["sum__SP_POP_TOTL"],
+                viz_type="treemap_v2",
+                metric="sum__SP_POP_TOTL",
                 groupby=["region", "country_code"],
             ),
         ),
@@ -376,18 +345,12 @@ def create_slices(tbl: BaseDatasource) -> List[Slice]:
 
 
 dashboard_positions = {
-    "CHART-36bfc934": {
-        "children": [],
-        "id": "CHART-36bfc934",
-        "meta": {"chartId": 40, "height": 25, "sliceName": "Region Filter", "width": 2},
-        "type": "CHART",
-    },
     "CHART-37982887": {
         "children": [],
         "id": "CHART-37982887",
         "meta": {
             "chartId": 41,
-            "height": 25,
+            "height": 52,
             "sliceName": "World's Population",
             "width": 2,
         },
@@ -468,7 +431,7 @@ dashboard_positions = {
         "type": "COLUMN",
     },
     "COLUMN-fe3914b8": {
-        "children": ["CHART-36bfc934", "CHART-37982887"],
+        "children": ["CHART-37982887"],
         "id": "COLUMN-fe3914b8",
         "meta": {"background": "BACKGROUND_TRANSPARENT", "width": 2},
         "type": "COLUMN",

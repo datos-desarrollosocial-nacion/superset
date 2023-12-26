@@ -23,23 +23,27 @@ import {
   ControlPanelsContainerProps,
   ControlSetRow,
   ControlStateMapping,
+  ControlSubSectionHeader,
   D3_TIME_FORMAT_DOCS,
   formatSelectOptions,
   getStandardizedControls,
   sections,
   sharedControls,
 } from '@superset-ui/chart-controls';
+import {
+  legendSection,
+  richTooltipSection,
+  seriesOrderSection,
+  showValueSection,
+  truncateXAxis,
+  xAxisBounds,
+} from '../../../controls';
 
 import { OrientationType } from '../../types';
 import {
   DEFAULT_FORM_DATA,
   TIME_SERIES_DESCRIPTION_TEXT,
 } from '../../constants';
-import {
-  legendSection,
-  richTooltipSection,
-  showValueSection,
-} from '../../../controls';
 
 const {
   logAxis,
@@ -170,6 +174,7 @@ function createAxisControl(axis: 'x' | 'y'): ControlSetRow[] {
           choices: [
             [0, '0°'],
             [45, '45°'],
+            [90, '90°'],
           ],
           default: xAxisLabelRotation,
           renderTrigger: true,
@@ -192,6 +197,7 @@ function createAxisControl(axis: 'x' | 'y'): ControlSetRow[] {
         },
       },
     ],
+    ['currency_format'],
     [
       {
         name: 'logAxis',
@@ -220,6 +226,8 @@ function createAxisControl(axis: 'x' | 'y'): ControlSetRow[] {
         },
       },
     ],
+    [truncateXAxis],
+    [xAxisBounds],
     [
       {
         name: 'truncateYAxis',
@@ -291,9 +299,9 @@ const config: ControlPanelConfig = {
       tabOverride: 'customize',
       expanded: true,
       controlSetRows: [
-        [<div className="section-header">{t('X Axis')}</div>],
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         ...createAxisTitleControl('x'),
-        [<div className="section-header">{t('Y Axis')}</div>],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         ...createAxisTitleControl('y'),
       ],
     },
@@ -301,6 +309,7 @@ const config: ControlPanelConfig = {
       label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
+        ...seriesOrderSection,
         ['color_scheme'],
         ...showValueSection,
         [
@@ -316,10 +325,10 @@ const config: ControlPanelConfig = {
           },
         ],
         ...legendSection,
-        [<div className="section-header">{t('X Axis')}</div>],
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         ...createAxisControl('x'),
         ...richTooltipSection,
-        [<div className="section-header">{t('Y Axis')}</div>],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         ...createAxisControl('y'),
       ],
     },

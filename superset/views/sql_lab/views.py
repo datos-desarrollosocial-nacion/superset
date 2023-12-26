@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
 import logging
 
 import simplejson as json
@@ -21,7 +22,7 @@ from flask import g, redirect, request, Response
 from flask_appbuilder import expose
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access, has_access_api
-from flask_babel import lazy_gettext as _
+from flask_babel import gettext as __, lazy_gettext as _
 from sqlalchemy import and_
 
 from superset import db
@@ -138,20 +139,22 @@ def _get_owner_id(tab_state_id: int) -> int:
 
 class TabStateView(BaseSupersetView):
     @has_access_api
-    @expose("/", methods=["POST"])
+    @expose("/", methods=("POST",))
     def post(self) -> FlaskResponse:  # pylint: disable=no-self-use
         query_editor = json.loads(request.form["queryEditor"])
         tab_state = TabState(
             user_id=get_user_id(),
             # This is for backward compatibility
             label=query_editor.get("name")
-            or query_editor.get("title", _("Untitled Query")),
+            or query_editor.get("title", __("Untitled Query")),
             active=True,
             database_id=query_editor["dbId"],
             schema=query_editor.get("schema"),
             sql=query_editor.get("sql", "SELECT ..."),
             query_limit=query_editor.get("queryLimit"),
             hide_left_bar=query_editor.get("hideLeftBar"),
+            saved_query_id=query_editor.get("remoteId"),
+            template_params=query_editor.get("templateParams"),
         )
         (
             db.session.query(TabState)
@@ -163,7 +166,7 @@ class TabStateView(BaseSupersetView):
         return json_success(json.dumps({"id": tab_state.id}))
 
     @has_access_api
-    @expose("/<int:tab_state_id>", methods=["DELETE"])
+    @expose("/<int:tab_state_id>", methods=("DELETE",))
     def delete(self, tab_state_id: int) -> FlaskResponse:  # pylint: disable=no-self-use
         if _get_owner_id(tab_state_id) != get_user_id():
             return Response(status=403)
@@ -178,7 +181,7 @@ class TabStateView(BaseSupersetView):
         return json_success(json.dumps("OK"))
 
     @has_access_api
-    @expose("/<int:tab_state_id>", methods=["GET"])
+    @expose("/<int:tab_state_id>", methods=("GET",))
     def get(self, tab_state_id: int) -> FlaskResponse:  # pylint: disable=no-self-use
         if _get_owner_id(tab_state_id) != get_user_id():
             return Response(status=403)
@@ -191,7 +194,7 @@ class TabStateView(BaseSupersetView):
         )
 
     @has_access_api
-    @expose("<int:tab_state_id>/activate", methods=["POST"])
+    @expose("<int:tab_state_id>/activate", methods=("POST",))
     def activate(  # pylint: disable=no-self-use
         self, tab_state_id: int
     ) -> FlaskResponse:
@@ -210,18 +213,22 @@ class TabStateView(BaseSupersetView):
         return json_success(json.dumps(tab_state_id))
 
     @has_access_api
-    @expose("<int:tab_state_id>", methods=["PUT"])
-    def put(self, tab_state_id: int) -> FlaskResponse:  # pylint: disable=no-self-use
+    @expose("<int:tab_state_id>", methods=("PUT",))
+    def put(self, tab_state_id: int) -> FlaskResponse:
         if _get_owner_id(tab_state_id) != get_user_id():
             return Response(status=403)
 
         fields = {k: json.loads(v) for k, v in request.form.to_dict().items()}
+        if client_id := fields.get("latest_query_id"):
+            query = db.session.query(Query).filter_by(client_id=client_id).one_or_none()
+            if not query:
+                return self.json_response({"error": "Bad request"}, status=400)
         db.session.query(TabState).filter_by(id=tab_state_id).update(fields)
         db.session.commit()
         return json_success(json.dumps(tab_state_id))
 
     @has_access_api
-    @expose("<int:tab_state_id>/migrate_query", methods=["POST"])
+    @expose("<int:tab_state_id>/migrate_query", methods=("POST",))
     def migrate_query(  # pylint: disable=no-self-use
         self, tab_state_id: int
     ) -> FlaskResponse:
@@ -236,7 +243,7 @@ class TabStateView(BaseSupersetView):
         return json_success(json.dumps(tab_state_id))
 
     @has_access_api
-    @expose("<int:tab_state_id>/query/<client_id>", methods=["DELETE"])
+    @expose("<int:tab_state_id>/query/<client_id>", methods=("DELETE",))
     def delete_query(  # pylint: disable=no-self-use
         self, tab_state_id: int, client_id: str
     ) -> FlaskResponse:
@@ -274,7 +281,7 @@ class TabStateView(BaseSupersetView):
 
 class TableSchemaView(BaseSupersetView):
     @has_access_api
-    @expose("/", methods=["POST"])
+    @expose("/", methods=("POST",))
     def post(self) -> FlaskResponse:  # pylint: disable=no-self-use
         table = json.loads(request.form["table"])
 
@@ -299,7 +306,7 @@ class TableSchemaView(BaseSupersetView):
         return json_success(json.dumps({"id": table_schema.id}))
 
     @has_access_api
-    @expose("/<int:table_schema_id>", methods=["DELETE"])
+    @expose("/<int:table_schema_id>", methods=("DELETE",))
     def delete(  # pylint: disable=no-self-use
         self, table_schema_id: int
     ) -> FlaskResponse:
@@ -310,7 +317,7 @@ class TableSchemaView(BaseSupersetView):
         return json_success(json.dumps("OK"))
 
     @has_access_api
-    @expose("/<int:table_schema_id>/expanded", methods=["POST"])
+    @expose("/<int:table_schema_id>/expanded", methods=("POST",))
     def expanded(  # pylint: disable=no-self-use
         self, table_schema_id: int
     ) -> FlaskResponse:

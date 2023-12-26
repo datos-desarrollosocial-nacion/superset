@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -17,8 +16,9 @@
 # under the License.
 import json
 import logging
+from collections.abc import Sequence
 from io import IOBase
-from typing import Sequence, Union
+from typing import Union
 
 import backoff
 from flask_babel import gettext as __
@@ -43,6 +43,7 @@ from superset.reports.notifications.exceptions import (
     NotificationParamException,
     NotificationUnprocessableException,
 )
+from superset.utils.core import get_email_address_list
 from superset.utils.decorators import statsd_gauge
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,15 @@ class SlackNotification(BaseNotification):  # pylint: disable=too-few-public-met
     type = ReportRecipientType.SLACK
 
     def _get_channel(self) -> str:
-        return json.loads(self._recipient.recipient_config_json)["target"]
+        """
+        Get the recipient's channel(s).
+        Note Slack SDK uses "channel" to refer to one or more
+        channels. Multiple channels are demarcated by a comma.
+        :returns: The comma separated list of channel(s)
+        """
+        recipient_str = json.loads(self._recipient.recipient_config_json)["target"]
+
+        return ",".join(get_email_address_list(recipient_str))
 
     def _message_template(self, table: str = "") -> str:
         return __(
